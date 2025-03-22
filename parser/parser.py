@@ -2,7 +2,8 @@ import spacy
 from spacy.tokens import Span
 from spacy.language import Language
 import PyPDF2
-from spacy.util import filter_spans 
+from spacy.util import filter_spans
+import requests
 
 def load_dut_spec(pdf_path):
     """Loads text from a DUT specification PDF."""
@@ -13,12 +14,19 @@ def load_dut_spec(pdf_path):
 
 nlp = spacy.load("en_core_web_sm")
 
-#TODO: These labels will later be made to dynamically be generated an LLM model
-ENTITY_LABELS = {
-    "SIGNAL": ["clk", "reset", "enable", "data", "addr"],
-    "CONSTRAINT": ["must be", "should not", "maximum", "minimum"],
-    "OPERATION": ["AND", "OR", "XOR", "MUX"]
-}
+# Function to fetch entity labels dynamically from an LLM
+def fetch_entity_labels():
+    url = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct"
+    headers = {"Authorization": "Bearer YOUR_HUGGINGFACE_API_KEY"}  # Replace with your API key
+    data = {"inputs": "Extract key entity labels from DUT specifications, including signals, constraints, and operations."}
+
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()[0]['generated_text'].strip()
+    else:
+        return {}
+
+ENTITY_LABELS = fetch_entity_labels()  # Fetch labels dynamically
 
 @Language.component("custom_entity_recognizer")
 def custom_entity_recognizer(doc):
@@ -36,7 +44,6 @@ def custom_entity_recognizer(doc):
                 if span is not None:
                     custom_entities.append(span)
                 start = end
-    # Combine existing entities with the custom ones and filter overlapping spans
     doc.ents = filter_spans(list(doc.ents) + custom_entities)
     return doc
 
